@@ -8,8 +8,18 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MUserLogic extends BaseLogic {
 
+/**
+ * 認証ロジッククラス
+ */
+public class AuthenticationLogic extends BaseLogic {
+
+    /**
+     * ユーザーマスタ取得(全件)
+     * @return
+     * @throws SQLException
+     * @throws ClassNotFoundException
+     */
     public List<MUserDto> selectAllMUserData() throws SQLException, ClassNotFoundException {
 
         createConnection();
@@ -34,5 +44,26 @@ public class MUserLogic extends BaseLogic {
         closeConnection();
 
         return resultList;
+    }
+
+
+    /**
+     * 貸出/返却処理
+     * @param transition 遷移先(貸出/返却)
+     * @param lockerNo ロッカー番号
+     * @return
+     */
+    public Boolean unlock(String transition, String lockerNo) {
+
+        // Bluetoothモジュール接続処理
+
+        // マイコンに下記情報を連携する(ロッカー番号,1(貸出))
+
+        // ロッカーマスタ取得
+
+        // テーブル更新(利用状況、ロッカーマスタ、利用履歴)
+
+
+        return false;
     }
 }
