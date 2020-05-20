@@ -42,11 +42,23 @@ public class AuthenticationActivity extends AppCompatActivity {
     String transition;
     // ロッカー番号
     String lockerNo;
+    // ユーザーID
+    String userId;
+    // 端末番号
+    String deviceNo;
+
     // NFCアダプター
     NfcAdapter nfcAdapter;
 
+    // 処理結果
+    static Boolean finalResult = true;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+        // 処理結果がfalseの場合、trueに初期化
+        if (!finalResult) finalResult = true;
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -61,18 +73,20 @@ public class AuthenticationActivity extends AppCompatActivity {
         /**
          * 前画面よりデータ受け取り
          * TODO 渡してもらうデータは下記でよいか
-         * 遷移先情報(貸出or返却),ロッカーマスタ.ロッカー番号
+         * 遷移先情報(貸出or返却),
+         * ロッカーマスタ.ロッカー番号
          */
         Intent intent = getIntent();
-        // intentから遷移先情報取得とロッカー番号を取得
+        // intentから遷移先情報,ロッカー番号,ユーザーID,端末番号を取得
         transition = intent.getStringExtra("TRANSITION");
         lockerNo = intent.getStringExtra("LOCKER_NO");
-
+        userId = intent.getStringExtra("USER_ID");
+        deviceNo = intent.getStringExtra("DEVICE_NO");
 
         // nfcAdapter初期化
 //        nfcAdapter = NfcAdapter.getDefaultAdapter(this);
 //        if (nfcAdapter == null) {
-//            Log.e("NFC_ADAPTER","NFCが有効化されていません");
+//            Log.d"NFC_ADAPTER","NFCが有効化されていません");
 //            return;
 //        }
 
@@ -90,8 +104,8 @@ public class AuthenticationActivity extends AppCompatActivity {
 
 //            nfcAdapter.enableReaderMode(this, new CustomReaderCallback(), NfcAdapter.FLAG_READER_NFC_A, null);
 
-            // NFCAdapterを経由せずに動確したい場合、下記２行のコメントアウトを外し、
-            // NfcAdapter関連のソースをコメントアウトする
+            // NFCAdapterを経由せずにDB接続を動確したい場合、下記２行のコメントアウトを外し、
+            // NFCAdapter関連のソースをコメントアウトする
             DbConnect task = new DbConnect(AuthenticationActivity.this);
             task.execute();
 
@@ -113,21 +127,11 @@ public class AuthenticationActivity extends AppCompatActivity {
         });
     }
 
-    private class CustomReaderCallback implements NfcAdapter.ReaderCallback {
-        @Override
-        public void onTagDiscovered(Tag tag) {
-            byte[] rawid = tag.getId();
-            final String idm = bytesToString(rawid);
-            Log.d("TAG", "Tag ID: " + idm);
-            runOnUiThread(() -> {
-                DbConnect task = new DbConnect(AuthenticationActivity.this);
-                //TODO 非同期処理に渡すものはカードリーダーから読み取ったユーザーIDと
-                // 前画面から渡されたロッカー番号と遷移先情報(貸出/返却)が必要
-                task.execute(idm);
-            });
-        }
-    }
-
+    /**
+     * バイトを文字列に変換
+     * @param bytes
+     * @return
+     */
     private String bytesToString(byte[] bytes) {
         StringBuffer sb = new StringBuffer();
         for (byte bt : bytes) {
@@ -152,11 +156,30 @@ public class AuthenticationActivity extends AppCompatActivity {
 
     }
 
-
-    /** インナークラス */
+    //---------------------------------------------------------------------------------------
+    /** 以下はインナークラス */
 
     /**
-     * 非同期でDB接続
+     * リーダーコールバック
+     * NFCタグを検出すると
+     * その情報を受け取る
+     */
+    private class CustomReaderCallback implements NfcAdapter.ReaderCallback {
+        @Override
+        public void onTagDiscovered(Tag tag) {
+            byte[] rawid = tag.getId();
+            final String idm = bytesToString(rawid);
+            Log.d("TAG", "Tag ID: " + idm);
+            runOnUiThread(() -> {
+                DbConnect task = new DbConnect(AuthenticationActivity.this);
+                task.execute(idm);
+            });
+        }
+    }
+
+    //---------------------------------------------------------------------------------------
+    /**
+     * 非同期でDB接続処理
      *
      * 引数1 … Activityからスレッド処理へ渡したい変数の型
      *        ※ Activityから呼び出すexecute()の引数の型
@@ -182,12 +205,10 @@ public class AuthenticationActivity extends AppCompatActivity {
         @Override
         protected Boolean doInBackground(String... idmString) {
 
-            // 処理結果
-            Boolean result = false;
-
             try {
 
                 AuthenticationLogic authLogic = new AuthenticationLogic();
+
                 // ユーザーマスタ情報を取得する
                 List<MUserDto> muserList = authLogic.selectAllMUserData();
 
@@ -197,6 +218,7 @@ public class AuthenticationActivity extends AppCompatActivity {
                 for (MUserDto target: muserList) {
                     // カードリーダーより読み取ったユーザー情報と一致するものがあるか比較する
                     if (target.getUserId().equals(dummyUserIdAcquiredByCardReader)) {
+                        // 実処理は下記のコメントアウトを外す
 //                        if (target.getUserId().equals(idmString)) {
                         matchedMUser = target;
                         break;
@@ -204,37 +226,50 @@ public class AuthenticationActivity extends AppCompatActivity {
                 }
 
                 if (matchedMUser == null) {
-                    Log.e("NO_MATCH_DATA","一致するユーザー情報が見つかりませんでした");
+                    Log.d("NO_MATCH_DATA","一致するユーザー情報が見つかりませんでした");
+                    finalResult = false;
                 }
 
-                // 貸出処理 or　返却処理(正常終了すればtrue)
-
+                /** --------- 貸出処理 or 返却処理 --------- */
                 // Bluetoothの初期化
                 bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
                 if( bluetoothAdapter == null ){
                     Log.d("BLUETOOTH_CONNECTION", "This device doesn't support Bluetooth.");
+                    finalResult = false;
                 }
                 // BTが設定で有効になっているかチェック
                 if (!bluetoothAdapter.isEnabled()) {
                     Log.d("BLUETOOTH_CONNECTION", "This device is disabled Bluetooth.");
+                    finalResult = false;
                 }
 
                 btClientThread = new BTClientThread();
                 btClientThread.start();
 
-                System.out.println("成功");
+                if (!finalResult) {
+                    // 処理結果がfalseだった場合、後続処理は行わない
+                    return finalResult;
+                }
+
+                // DB更新処理
+                authLogic.execute(transition, lockerNo, deviceNo, userId, matchedMUser.getUserName());
 
             } catch (ClassNotFoundException e) {
                 Log.e("DBCONNECTION", "クラスが見つかりません", e);
-                e.printStackTrace();
+                finalResult = false;
             } catch (SQLException e) {
                 Log.e("DBCONNECTION", "SQLが不正です", e);
-                e.printStackTrace();
+                finalResult = false;
             }
 
-            return result;
+            return finalResult;
         }
 
+        /**
+         * doInBackgroundの処理結果受け取り
+         * 処理結果に応じて画面表示を制御する
+         * @param result 処理結果
+         */
         @Override
         protected void onPostExecute(Boolean result) {
             super.onPostExecute(result);
@@ -243,7 +278,7 @@ public class AuthenticationActivity extends AppCompatActivity {
                 // 画面表示の制御（-ユーザー照会完了-）
                 // ロッカー〇〇を開錠しました
                 txt01.setText(R.string.user_info_text_after1);
-                txt02.setText(R.string.user_info_text_after2);
+                txt02.setText(R.string.user_info_text_after2 + lockerNo + R.string.user_info_text_after3);
                 txt02.setVisibility(View.VISIBLE);
 
             } else {
@@ -254,7 +289,7 @@ public class AuthenticationActivity extends AppCompatActivity {
         }
     }
 
-
+    //---------------------------------------------------------------------------------
     /**
      * Bluetooth接続時処理スレッド
      */
@@ -277,6 +312,7 @@ public class AuthenticationActivity extends AppCompatActivity {
 
             if(bluetoothDevice == null){
                 Log.d("BLUETOOTH_CONNECTION", "No device found.");
+                finalResult = false;
                 return;
             }
 
@@ -325,18 +361,22 @@ public class AuthenticationActivity extends AppCompatActivity {
                         }
 
                     } catch (IOException | InterruptedException e) {
-                        Log.d("BLUETOOTH_CONNECTION", e.getMessage());
+                        Log.e("BLUETOOTH_CONNECTION", e.getMessage(), e);
+                        finalResult = false;
                     }
                     Thread.sleep(3000);
                 }
             } catch (IOException | InterruptedException e) {
-                Log.d("BLUETOOTH_CONNECTION", e.getMessage());
+                Log.e("BLUETOOTH_CONNECTION", e.getMessage(), e);
+                finalResult = false;
             }
 
             if (bluetoothSocket != null) {
                 try {
                     bluetoothSocket.close();
                 } catch (IOException e) {
+                    Log.e("BLUETOOTH_CONNECTION", e.getMessage(), e);
+                    finalResult = false;
                 }
                     bluetoothSocket = null;
             }

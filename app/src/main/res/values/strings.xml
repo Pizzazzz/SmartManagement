@@ -2,7 +2,8 @@
     <string name="app_name">認証</string>
     <string name="user_info_text_before">ユーザー情報を照会中...</string>
     <string name="user_info_text_after1">-ユーザー照会完了-</string>
-    <string name="user_info_text_after2">ロッカー〇〇を開錠しました</string>
+    <string name="user_info_text_after2">ロッカー</string>
+    <string name="user_info_text_after3">を開錠しました</string>
     <string name="user_info_text_after_failure">ユーザー情報が見つかりませんでした</string>
 
     <string name="reader_on">READER MODE ON</string>

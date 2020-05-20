@@ -3,6 +3,7 @@ package com.example.smartmanagement.util;
 import com.mysql.jdbc.Connection;
 
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -27,6 +28,36 @@ public class BaseLogic {
     }
 
     /**
+     * トランザクションを開始します
+     * @param commitFlg コミットフラグ
+     * @throws SQLException
+     * @throws ClassNotFoundException
+     */
+    protected void startTransaction(boolean commitFlg) throws SQLException, ClassNotFoundException {
+        createConnection();
+        conn.setAutoCommit(commitFlg);
+    }
+
+    /**
+     * トランザクションを終了します
+     * @param commitFlg コミットフラグ
+     * @throws SQLException
+     */
+    protected void endTransaction(boolean commitFlg) throws SQLException {
+
+        try {
+            if (commitFlg) {
+                conn.commit();
+            } else {
+                conn.rollback();
+            }
+        } finally {
+            closeConnection();
+        }
+    }
+
+
+    /**
      * DB接続を終了します。
      * @throws SQLException
      */
@@ -37,6 +68,12 @@ public class BaseLogic {
         }
     }
 
+    /**
+     * executeQueryラッパー
+     * @param sql SQL
+     * @return 結果
+     * @throws SQLException
+     */
     protected HandledResultSet executeQuery(String sql) throws SQLException {
 
 //        PreparedStatement pStmt = null;
@@ -73,5 +110,38 @@ public class BaseLogic {
             }
         }
 
+    }
+
+    /**
+     * executeUpdateラッパー
+     * @param sql SQL
+     * @return 更新・登録件数
+     * @throws SQLException
+     */
+    protected int executeUpdate(String sql, Mapping mapping) throws SQLException {
+
+        PreparedStatement pStmt = null;
+        try {
+            pStmt = conn.prepareStatement(sql);
+            mapping.setPreparedStatementParameters(pStmt);
+            return pStmt.executeUpdate();
+
+        } catch (SQLException e) {
+
+            if (pStmt != null) {
+                pStmt.close();
+            }
+            if (conn != null) {
+
+                conn.rollback();
+                conn.close();
+            }
+            throw e;
+        } finally {
+
+            if (pStmt != null) {
+                pStmt.close();
+            }
+        }
     }
 }
